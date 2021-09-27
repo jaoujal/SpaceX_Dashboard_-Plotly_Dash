@@ -11,9 +11,17 @@ spacex_df = pd.read_csv("spacex_launch_dash.csv")
 max_payload = spacex_df['Payload Mass (kg)'].max()
 min_payload = spacex_df['Payload Mass (kg)'].min()
 
+data = spacex_df[['Launch Site','class']]
+def class_oc(clas):
+    if clas ==1:
+        return 1
+    else:
+        return 2
+data['class2'] = data['class'].apply(class_oc)
+
 # Create a dash application
 app = dash.Dash(__name__)
-
+#
 # Create an app layout
 app.layout = html.Div(children=[html.H1('SpaceX Launch Records Dashboard',
                                         style={'textAlign': 'center', 'color': '#503D36',
@@ -44,6 +52,14 @@ app.layout = html.Div(children=[html.H1('SpaceX Launch Records Dashboard',
                                 html.P("Payload range (Kg):"),
                                 # TASK 3: Add a slider to select payload range
                                 #dcc.RangeSlider(id='payload-slider',...)
+                                 dcc.RangeSlider(id='payload-slider',
+                                                min = 0,
+                                                max = 10000,
+                                                step = 1000,
+                                                marks={0:'0 Kg', 10000:'10000 Kg'},
+                                                value = [0, 5000]                                             
+                                                ),
+                                html.Div(id='slider-output-container'),
 
                                 # TASK 4: Add a scatter chart to show the correlation between payload and launch success
                                 html.Div(dcc.Graph(id='success-payload-scatter-chart')),
@@ -52,21 +68,57 @@ app.layout = html.Div(children=[html.H1('SpaceX Launch Records Dashboard',
 # TASK 2:
 # Add a callback function for `site-dropdown` as input, `success-pie-chart` as output
 
+
 @app.callback(Output(component_id='success-pie-chart', component_property='figure'),
               Input(component_id='site-dropdown', component_property='value'))
 def get_pie_chart(entered_site):
-    data = spacex_df
     if entered_site == 'All Sites':
-        fig = px.pie(data[['Launch Site','class']], values='class',  
+        fig = px.pie(data, values='class',  
         names='Launch Site', 
         title='The Total Launches by Site')
         return fig
     else:
+        fig = px.pie(data[data['Launch Site'] == entered_site], values='class2', 
+            names='class', 
+            title='The Total Launches for the site'+' '+entered_site)   
         return fig   
+
+    
 
 # TASK 4:
 # Add a callback function for `site-dropdown` and `payload-slider` as inputs, `success-payload-scatter-chart` as output
 
+@app.callback(Output(component_id='success-payload-scatter-chart', component_property='figure'),
+            [Input(component_id='site-dropdown', component_property='value'), Input(component_id="payload-slider", component_property="value")]
+            )
+def get_scatter_chart(site_dropdown, payload_slider):
+    data = spacex_df
+    Booster_Version = []
+    
+    for index, row in data.iterrows():
+        x = row['Booster Version'].split()[1]
+        Booster_Version.append(x)
+        
+    data['Booster_Version'] = Booster_Version
+    
+    if site_dropdown == 'All Sites':
+        fig1 = px.scatter(data[(data['Payload Mass (kg)'] > min(payload_slider)) & (data['Payload Mass (kg)'] < max(payload_slider))], 
+                        x="Payload Mass (kg)", y="class", 
+                        color="Booster_Version",
+                        )
+        return fig1
+    else:
+        fig1 = px.scatter(data[(data['Payload Mass (kg)'] > min(payload_slider)) & (data['Payload Mass (kg)'] < max(payload_slider)) & (data['Launch Site'] == site_dropdown)], 
+                        x="Payload Mass (kg)", y="class", 
+                        color="Booster_Version",
+                        )
+        return fig1  
+
+@app.callback(
+    dash.dependencies.Output('slider-output-container', 'children'),
+    [dash.dependencies.Input('payload-slider', 'value')])
+def update_output(value):
+    return 'You have selected "{}"'.format(value)
 
 # Run the app
 if __name__ == '__main__':
